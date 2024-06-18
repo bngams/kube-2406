@@ -1,0 +1,123 @@
+#
+# Minimal dynamic PVC 
+#
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: wp-pvc
+  namespace: wp
+  labels:
+    app: wordpress
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: standard
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-deployment
+  namespace: wp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+
+    spec:
+      containers:
+      - name: wordpress
+        image: wordpress:latest
+        env:
+          - name: WORDPRESS_DB_HOST
+            value: mariadb-service
+          - name: WORDPRESS_DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: maria-user-creds
+                key: user
+          - name: WORDPRESS_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: maria-user-creds
+                key: password
+          - name: WORDPRESS_DB_NAME
+            value: wordpress
+        ports:
+          - containerPort: 80
+        volumeMounts:
+          - mountPath: /var/www/html
+            name: wp-volume
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+      volumes:
+        - name: wp-volume
+          persistentVolumeClaim:
+            claimName: wp-pvc     
+       
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-service
+  namespace: wp
+spec:
+  selector:
+    app: wordpress
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress-ingress
+  namespace: wp
+spec:
+  rules:
+  - host: wp.kube
+    http:
+      paths:
+      - path: /website
+        pathType: Prefix
+        backend:
+          service:
+            name: wordpress-service
+            port:
+              number: 80
+
+---
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: wordpress-hpa
+  namespace: wp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: wordpress-deployment
+  minReplicas: 1
+  maxReplicas: 1
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageValue: 10m
+

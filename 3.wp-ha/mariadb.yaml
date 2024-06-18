@@ -1,0 +1,111 @@
+#
+# Minimal PVC where a developer can build a website.
+#
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: maria-pvc
+  namespace: wp
+  labels:
+    app: mariadb
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Mi
+  storageClassName: standard
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb-deployment
+  namespace: wp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:10.6.4-focal
+        # command:
+        #  - "--default-authentication-plugin=mysql_native_password"
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: maria-root-creds
+                key: password
+          - name: MYSQL_DATABASE
+            value: wordpress
+          - name: MYSQL_USER
+            valueFrom:
+              secretKeyRef:
+                name: maria-user-creds
+                key: user
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: maria-user-creds
+                key: password
+        ports:
+          - containerPort: 3306
+        volumeMounts:
+          - mountPath: /var/lib/mysql
+            name: maria-volume
+          - mountPath: /var/conf/mysql
+            name: mariadb-config
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+      volumes:
+        - name: myconfig
+          configMap:
+            name: mariadb-config
+        - name: maria-volume
+          persistentVolumeClaim:
+            claimName: maria-pvc 
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-service
+  namespace: wp
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: maria-dump
+  namespace: wp
+spec:
+  schedule: "*/2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: maria-dump
+            image: mariadb:10.6.4-focal
+            command:
+            - /bin/bash
+            - -c
+            - mysqldump --user=root --password=somewordpress --host=mariadb-service  wordpress > $(date +"%Y%m%dT%H%M%S")-db.sql
+          restartPolicy: OnFailure
+         # volumes 

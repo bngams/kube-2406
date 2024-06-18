@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: whoami
+  name: whoami
+spec:
+  selector:
+    name: whoami
+  ports:
+  - port: 80
+    targetPort: 80
