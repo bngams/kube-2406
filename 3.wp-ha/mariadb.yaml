@@ -15,6 +15,7 @@ spec:
     requests:
       storage: 200Mi
   storageClassName: standard
+  hostPath: '/mnt/mariadb'
 
 ---
 apiVersion: apps/v1
@@ -60,16 +61,11 @@ spec:
         volumeMounts:
           - mountPath: /var/lib/mysql
             name: maria-volume
-          - mountPath: /var/conf/mysql
-            name: mariadb-config
         resources:
           limits:
             cpu: 200m
             memory: 200Mi
       volumes:
-        - name: myconfig
-          configMap:
-            name: mariadb-config
         - name: maria-volume
           persistentVolumeClaim:
             claimName: maria-pvc 
@@ -106,6 +102,6 @@ spec:
             command:
             - /bin/bash
             - -c
-            - mysqldump --user=root --password=somewordpress --host=mariadb-service  wordpress > $(date +"%Y%m%dT%H%M%S")-db.sql
+            - mysqldump --user=admin --password=secret --host=mariadb-service  wordpress > $(date +"%Y%m%dT%H%M%S")-db.sql
           restartPolicy: OnFailure
          # volumes 

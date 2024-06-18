@@ -1,0 +1,6 @@
+namePrefix: dev-
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - mariadb.yaml
+  - wp.yaml
